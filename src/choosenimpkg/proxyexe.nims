@@ -1,3 +1,5 @@
+switch("define", "useFork")
+
 when defined(staticBuild):
   when defined(linux):
     putEnv("CC", "musl-gcc")

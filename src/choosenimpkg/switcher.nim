@@ -1,33 +1,47 @@
-import os, strutils, osproc, pegs
+import os, strutils, osproc, pegs, tables
 
 import nimblepkg/[cli, version, options]
 from nimblepkg/packageinfo import getNameVersion
 
-import cliparams, common
+import cliparams, common, utils
 
 when defined(windows):
   import env
 
-proc compileProxyexe() =
-  var cmd =
-    when defined(windows):
-      "cmd /C \"cd ../../ && nimble c"
-    else:
-      "cd ../../ && nimble c"
+const proxyExeSources = {
+  "src" / "choosenimpkg" / "proxyexe.nim": staticRead("./proxyexe.nim"),
+  "src" / "choosenimpkg" / "proxyexe.nims": staticRead("./proxyexe.nims"),
+  "src" / "choosenimpkg" / "common.nim": staticRead("./common.nim"),
+  "src" / "choosenimpkg" / "cliparams.nim": staticRead("./cliparams.nim"),
+  "choosenim.nimble": staticRead("../../choosenim.nimble")
+}.toTable()
+
+proc compileProxyexe(currentNimBinPath: string): string =
+  var cmd = if defined(macosx) and isRosetta(): "arch -arm64 " else: ""
+
+  cmd.add (currentNimBinPath / "nimble").addFileExt(ExeExt) &
+    " --nim:'" & (currentNimBinPath / "nim").addFileExt(ExeExt) & "' c"
   when defined(release):
     cmd.add " -d:release"
   when defined(staticBuild):
     cmd.add " -d:staticBuild"
-  cmd.add " src/choosenimpkg/proxyexe"
+
+  let proxyexeproject = getTempDir() / "proxyexe"
+  createDir(proxyexeproject / "src" / "choosenimpkg")
+
+  for file, code in proxyExeSources.pairs:
+    let filepath = proxyexeproject / file
+    writeFile(filepath, code)
+
+  cmd.add " " & proxyexeproject / "src" / "choosenimpkg" / "proxyexe.nim"
+
   when defined(windows):
     cmd.add("\"")
-  let (output, exitCode) = gorgeEx(cmd)
+  let (output, exitCode) = execCmdEx(cmd)
   doAssert exitCode == 0, $(output, cmd)
 
-static: compileProxyexe()
-
-const
-  proxyExe = staticRead("proxyexe".addFileExt(ExeExt))
+  discard execShellCmd("file " & (proxyexeproject / "src" / "choosenimpkg" / "proxyexe").addFileExt(ExeExt))
+  return readFile((proxyexeproject / "src" / "choosenimpkg" / "proxyexe").addFileExt(ExeExt))
 
 proc getInstallationDir*(params: CliParams, version: Version): string =
   return params.getInstallDir() / ("nim-$1" % $version)
@@ -43,7 +57,14 @@ proc getSelectedPath*(params: CliParams): string =
 proc getProxyPath(params: CliParams, bin: string): string =
   return params.getBinDir() / bin.addFileExt(ExeExt)
 
-proc areProxiesInstalled(params: CliParams, proxies: openarray[string]): bool =
+var isProxyCompiled: bool = false
+var proxyExe: string = ""
+
+proc areProxiesInstalled(params: CliParams, proxies: openarray[string], currentNimBinPath: string): bool =
+  if not isProxyCompiled:
+    proxyExe = compileProxyexe(currentNimBinPath)
+    isProxyCompiled = true
+
   result = true
   for proxy in proxies:
     # Verify that proxy exists.
@@ -201,7 +222,7 @@ proc switchToPath(filepath: string, params: CliParams): bool =
 
   # Return early if this version is already selected.
   let selectedPath = params.getSelectedPath()
-  let proxiesInstalled = params.areProxiesInstalled(proxiesToInstall)
+  let proxiesInstalled = params.areProxiesInstalled(proxiesToInstall, filepath / "bin")
   if selectedPath == filepath and proxiesInstalled:
     return false
   else:
