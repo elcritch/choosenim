@@ -17,6 +17,7 @@ const proxyExeSources = {
 }.toTable()
 
 proc compileProxyexe(currentNimBinPath: string): string =
+  display("Building:", "ProxyExe", priority = HighPriority)
   var cmd = if defined(macosx) and isRosetta(): "arch -arm64 " else: ""
 
   cmd.add (currentNimBinPath / "nimble").addFileExt(ExeExt) &
@@ -27,21 +28,26 @@ proc compileProxyexe(currentNimBinPath: string): string =
     cmd.add " -d:staticBuild"
 
   let proxyexeproject = getTempDir() / "proxyexe"
+  display("Debug:", "Creating $# for ProxyExe project." % proxyexeproject, priority = DebugPriority)
   createDir(proxyexeproject / "src" / "choosenimpkg")
 
   for file, code in proxyExeSources.pairs:
     let filepath = proxyexeproject / file
+    display("Extracting:", "$# to $#." % [file, filepath], priority = DebugPriority)
     writeFile(filepath, code)
 
   cmd.add " " & proxyexeproject / "src" / "choosenimpkg" / "proxyexe.nim"
 
   when defined(windows):
     cmd.add("\"")
+
+  display("Executing:", cmd, priority = DebugPriority)
   let (output, exitCode) = execCmdEx(cmd)
   doAssert exitCode == 0, $(output, cmd)
 
-  discard execShellCmd("file " & (proxyexeproject / "src" / "choosenimpkg" / "proxyexe").addFileExt(ExeExt))
-  return readFile((proxyexeproject / "src" / "choosenimpkg" / "proxyexe").addFileExt(ExeExt))
+  let proxyExe = readFile((proxyexeproject / "src" / "choosenimpkg" / "proxyexe").addFileExt(ExeExt))
+  removeDir(proxyexeproject, true)
+  return proxyExe
 
 proc getInstallationDir*(params: CliParams, version: Version): string =
   return params.getInstallDir() / ("nim-$1" % $version)
@@ -57,6 +63,8 @@ proc getSelectedPath*(params: CliParams): string =
 proc getProxyPath(params: CliParams, bin: string): string =
   return params.getBinDir() / bin.addFileExt(ExeExt)
 
+# this is global proxyExe binary content and isProxyCompiled flag
+# isProxyCompiled flag is used to avoid recompiling proxyExe during a single process ( run )
 var isProxyCompiled: bool = false
 var proxyExe: string = ""
 
