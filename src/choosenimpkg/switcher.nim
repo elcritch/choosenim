@@ -21,7 +21,7 @@ proc compileProxyexe(currentNimBinPath: string): string =
   var cmd = if defined(macosx) and isRosetta(): "arch -arm64 " else: ""
 
   cmd.add (currentNimBinPath / "nimble").addFileExt(ExeExt) &
-    " --nim:'" & (currentNimBinPath / "nim").addFileExt(ExeExt) & "' c"
+    " -y --nim:'" & (currentNimBinPath / "nim").addFileExt(ExeExt) & "' c"
   when defined(release):
     cmd.add " -d:release"
   when defined(staticBuild):
