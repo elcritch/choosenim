@@ -166,6 +166,7 @@ proc writeProxy(bin: string, params: CliParams) =
   if fileExists(proxyPath) and readFile(proxyPath) == proxyExe: return
 
   try:
+    removeFile(proxyPath)
     writeFile(proxyPath, proxyExe)
   except IOError:
     display("Warning:", "component '$1' possibly in use, write failed" % bin, Warning,
