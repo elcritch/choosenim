@@ -153,7 +153,7 @@ proc writeProxy(bin: string, params: CliParams) =
         removeDir(dir)
         display("Removed", dir, priority = HighPriority)
 
-  if symlinkExists(proxyPath):
+  if symlinkExists(proxyPath) and not params.firstInstall:
     let msg = "Symlink for '$1' detected in '$2'. Can I remove it?" %
               [bin, proxyPath.splitFile().dir]
     if not prompt(dontForcePrompt, msg): return
